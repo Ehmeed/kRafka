@@ -19,9 +19,9 @@ kRafka.newConsumer <- function(
   .jnew("org/apache/kafka/clients/consumer/KafkaConsumer", properties)
 }
 
-kRafka.poll <- function(consumer, timeout) {
+kRafka.poll <- function(consumer, timeout = .Machine$integer.max) {
   consumer$poll(.toDuration(timeout))
-}
+} #todo mapping from consumer records to actual values somehow
 
 kRafka.listTopics <- function(consumer, timeout = NULL) {
   if (is.null(timeout)) {
@@ -40,8 +40,17 @@ kRafka.close <- function(consumer, timeout = NULL) {
     stopifnot(is.numeric(timeout))
     consumer$close(.toDuration(timeout))
   }
+  consumer
 }
 
-#close
-#subscribe
+kRafka.subscribe <- function(consumer, topics) {
+  stopifnot(is.vector(topics))
+  topicList = .stringVectorToCollection(topics)
+  consumer$subscribe(topicList)
+  consumer
+}
 
+kRafka.unsubscribe <- function(consumer) {
+  consumer$unsubscribe()
+  consumer
+}

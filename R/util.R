@@ -7,6 +7,15 @@
   properties
 }
 
+.stringVectorToCollection <- function(vec) {
+  arrayList <- .jnew("java/util/ArrayList")
+  for (value in vec) {
+    arrayList$add(.jnew("java/lang/String", value))
+  }
+  .jcast(arrayList, "java/util/Collection")
+}
+
+
 .putToProps <- function(properties, key, value) {
   stopifnot(is.character(key))
   stopifnot(is.character(value))
