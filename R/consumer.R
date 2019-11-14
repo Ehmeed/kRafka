@@ -32,3 +32,16 @@ kRafka.listTopics <- function(consumer, timeout = NULL) {
   }
   sapply(as.list(topics$keySet()), function(topic) topic$toString())
 }
+
+kRafka.close <- function(consumer, timeout = NULL) {
+  if (is.null(timeout)) {
+    consumer$close()
+  } else {
+    stopifnot(is.numeric(timeout))
+    consumer$close(.toDuration(timeout))
+  }
+}
+
+#close
+#subscribe
+
