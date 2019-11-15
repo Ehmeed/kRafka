@@ -1,5 +1,5 @@
 package org.ehmeed.kRafka
 
-fun main() {
-    println("main")
+class A {
+    fun print() = println("ahoj")
 }
