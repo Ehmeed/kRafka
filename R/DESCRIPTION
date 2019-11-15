@@ -1,6 +1,6 @@
 Package: kRafka
 Type: Package
-Title: Thin Wrapper for Kafka Clients
+Title: Wrapper for Kafka Clients
 Version: 0.1.0
 Author: Ehmeed
 Maintainer: Milan Hruban <ehmeed123123@gmail.com>

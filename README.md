@@ -4,20 +4,15 @@
 
 > **WARNING**: Current api is very unstable.
 
-To run, provide `kafka-clients-2.3.1.jar` (or version of your choice) to `inst/java/` folder.
 
 ## Roadmap
 
 * [x] write a roadmap
 
-* [ ] support selected consumer api functionality (`poll`, `assign`, `listTopics` etc.)
-
-* [ ] provide high level abstraction (e.g. `readMessages(topic, from, to)`)
+* [ ] provide high level consumer abstraction (e.g. `readMessages(topic, from, to)`)
 
 * [ ] release 1.0 :tada:
 
-* [ ] ootb mapping of generic record to list/json
-
-* [ ] ootb mapping of results into data.frame
+* [ ] create utility functions for working with kafka topics in dbplyr fashion
 
 * [ ] support producer api
