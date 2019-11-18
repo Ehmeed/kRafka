@@ -5,6 +5,9 @@ class DataFrame(
     val timestamps: MutableList<Long?> = mutableListOf(),
     val values: MutableList<String?> = mutableListOf()
 ) {
+    val size: Int
+        get() = keys.size
+
     fun append(key: String?, timestamp: Long?, value: String?) {
         keys.add(key)
         timestamps.add(timestamp)
@@ -17,10 +20,3 @@ class DataFrame(
         this.values.addAll(values)
     }
 }
-
-data class TopicOffsetsListing(
-    val firstMessageOffset: Long,
-    val firstMessageTimestamp: String,
-    val lastMessageOffset: Long,
-    val lastMessageTimestamp: String
-)
