@@ -28,8 +28,8 @@ kRafka.newConsumer <- function(
 kRafka.read <- function(consumer,
                         topic,
                         type = "datetime",
-                        from = "1970-01-01 00:00:00",
-                        to = "2030-01-01 00:00:00",
+                        from = "1970-01-01T00:00:00.00Z",
+                        to = "2030-01-01T00:00:00.00Z",
                         timeout = .Machine$integer.max,
                         maxMessages = .Machine$integer.max
 ) {
