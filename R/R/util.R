@@ -29,3 +29,10 @@
   stopifnot(is.numeric(time))
   J("java.time.Duration")$ofMillis(.jlong(time))
 }
+
+.toDataFrame <- function (df) {
+  timestamps <- sapply (as.list(df$getTimestamps()), function(item) as.numeric(item$toString()))
+  keys <- sapply (as.list(df$getKeys()), function(item) item$toString())
+  values <- sapply (as.list(df$getValues()), function(item) item$toString())
+  data.frame(key = keys, timestamp = timestamps, value = values)
+}

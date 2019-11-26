@@ -50,7 +50,7 @@ public fun readByDate(
     }
     val dataFrame = DataFrame()
     while (!exceededOffsets(consumer, offsetsTo) && !isTimeout(timeStart, timeout) && dataFrame.size < maxMessages) {
-        consumer.poll(Duration.ofMillis(timeout - (System.currentTimeMillis() - timeStart)))
+        consumer.poll(Duration.ofMillis((timeout - (System.currentTimeMillis() - timeStart)) / 10))
             .forEach { dataFrame.append(it.key(), it.timestamp(), it.value()) }
     }
 

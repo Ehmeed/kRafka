@@ -33,7 +33,7 @@ kRafka.read <- function(consumer,
                         timeout = .Machine$integer.max,
                         maxMessages = .Machine$integer.max
 ) {
-  J("org.ehmeed.kRafka.r.ApiKt")$read(
+  df = J("org.ehmeed.kRafka.r.ApiKt")$read(
     consumer,
     .jnew("java/lang/String", topic),
     .jnew("java/lang/String", type),
@@ -42,6 +42,7 @@ kRafka.read <- function(consumer,
     .jlong(timeout),
     .jlong(maxMessages)
   )
+  .toDataFrame(df)
 }
 
 kRafka.listTopics <- function(consumer, timeout = NULL) {
