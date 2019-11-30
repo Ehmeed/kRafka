@@ -1,11 +1,15 @@
 package org.ehmeed.kRafka.r
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp
+import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.TimeoutException
+import java.lang.Long.max
 import java.time.Duration
 import java.time.Instant
 import java.util.*
+import kotlin.NoSuchElementException
 
 typealias StringConsumer = KafkaConsumer<String, String>
 
@@ -20,78 +24,109 @@ public fun read(
     timeout: Long,
     maxMessages: Long
 ): DataFrame = when (type) {
-    "datetime" -> readByDate(consumer, topic, from, to, timeout, maxMessages)
-    "offsets" -> readByOffsets(consumer, topic, from, to, timeout, maxMessages)
-    else -> throw IllegalArgumentException("Only ${listOf("datetime", "offsets")} types are suppored ($type supplied)")
+    "datetime" -> readByDate(consumer, topic, from, to, timeout, maxMessages.toInt())
+    "offsets" -> readByOffsets(consumer, topic, from, to, timeout, maxMessages.toInt())
+    else -> throw IllegalArgumentException("Only ${listOf("datetime", "offsets")} types are supported ($type supplied)")
 }
 
 public fun readByDate(
     consumer: StringConsumer,
     topic: String,
-    from: String?,
-    to: String?,
+    from: String,
+    to: String,
     timeout: Long,
-    maxMessages: Long
+    maxMessages: Int
 ): DataFrame {
-    val timeStart = System.currentTimeMillis()
+    val timestampStart = System.currentTimeMillis()
     val timestampFrom = Instant.parse(from).toEpochMilli()
     val timestampTo = Instant.parse(to).toEpochMilli()
-    consumer.subscribe(listOf(topic))
-    while (consumer.assignment().isEmpty() && !isTimeout(timeStart, timeout)) {
-        consumer.poll(Duration.ofMillis(1000))
+    val timeLeft = { Duration.ofMillis(max(1L, timeout - (System.currentTimeMillis() - timestampStart))) }
+    val isTimeLeft =
+        { if (timeLeft().toMillis() <= 0) throw TimeoutException("Exceeded timeout while reading messages") else true }
+
+    val topicPartitions = getTopicPartitions(consumer, timeLeft, topic)
+
+    val (offsetsFrom, offsetsTo) = getOffsetsRangeForTime(
+        topicPartitions, timestampFrom, consumer, timeLeft, timestampTo
+    )
+    consumer.assign(offsetsFrom.keys)
+    consumer.seekOffsets(offsetsFrom)
+    var dataFrame = DataFrame()
+
+    while (dataFrame.size < maxMessages && isTimeLeft() && consumer.assignment().isNotEmpty()) {
+        val singlePollTimeout = Duration.ofMillis(1000)
+        val (correctRecords, incorrectRecords) = consumer.poll(singlePollTimeout).records(topic)
+            .partition { it.offset() < offsetsTo.offsetForPartition(it.partition()) }
+        correctRecords.forEach { dataFrame = dataFrame.append(it.key(), it.timestamp(), it.value()) }
+        if (incorrectRecords.isNotEmpty()) {
+            val finishedPartitions = incorrectRecords.map { it.partition() }
+            val updatedAssignment = consumer.assignment().filter { it.partition() in finishedPartitions }
+            consumer.assign(updatedAssignment)
+        } else if(correctRecords.isEmpty()) {
+            break
+        }
     }
 
-    val assignment = consumer.assignment()
-    val offsetsFrom = consumer.offsetsForTimes(assignment.associateWith { timestampFrom })
-    val offsetsTo: Map<TopicPartition, OffsetAndTimestamp?> = consumer.offsetsForTimes(assignment.associateWith { timestampTo })
-
-    offsetsFrom.forEach {
-        consumer.seek(it.key, it.value.offset())
-    }
-    val dataFrame = DataFrame()
-    while (!exceededOffsets(consumer, offsetsTo) && !isTimeout(timeStart, timeout) && dataFrame.size < maxMessages) {
-        consumer.poll(Duration.ofMillis((timeout - (System.currentTimeMillis() - timeStart)) / 10))
-            .forEach { dataFrame.append(it.key(), it.timestamp(), it.value()) }
-    }
-
-    return dataFrame
+    return dataFrame.head(maxMessages)
 }
 
-private fun isTimeout(timeStart: Long, timeout: Long) = System.currentTimeMillis() - timeStart >= timeout
+private fun Map<TopicPartition, Long>.offsetForPartition(partition: Int): Long {
+    return this.filter { it.key.partition() == partition }.values.toList().first()
+}
 
-private fun exceededOffsets(consumer: StringConsumer, offsetsTo: Map<TopicPartition, OffsetAndTimestamp?>): Boolean {
-    val currentOffsets = consumer.assignment().map { it.partition() to consumer.position(it) }
-    val maxOffsets = offsetsTo.toList().filter { it.second != null }.map { it.first.partition() to it.second!!.offset() }.toMap()
-    return currentOffsets.all { (partition, offset) -> offset >= maxOffsets.getOrDefault(partition, Long.MAX_VALUE) }
+private fun StringConsumer.seekOffsets(
+    offsetsFrom: Map<TopicPartition, Long>
+) {
+    offsetsFrom.forEach {
+        seek(it.key, it.value)
+    }
+}
+
+private fun getOffsetsRangeForTime(
+    topicPartitions: List<TopicPartition>,
+    timestampFrom: Long,
+    consumer: StringConsumer,
+    timeLeft: () -> Duration,
+    timestampTo: Long
+): Pair<Map<TopicPartition, Long>, Map<TopicPartition, Long>> {
+    val offsetsFrom = topicPartitions.associateWith { timestampFrom }
+        .let { consumer.offsetsForTimes(it, timeLeft()) }
+        .filter { it.value != null }.mapValues { it.value.offset() }
+
+    return offsetsFrom to getValidOffsetsTo(topicPartitions, timestampTo, consumer, timeLeft)
+}
+
+private fun getValidOffsetsTo(topicPartitions: List<TopicPartition>,
+                              timestampTo: Long,
+                              consumer: StringConsumer,
+                              timeLeft: () -> Duration): Map<TopicPartition, Long> {
+    val offsetsTo = topicPartitions.associateWith { timestampTo }
+        .let { consumer.offsetsForTimes(it, timeLeft()) }
+
+    return if (null in offsetsTo.values) {
+          (offsetsTo.filter { it.value != null }.mapValues { it.value.offset() } + consumer.endOffsets(topicPartitions, timeLeft()))
+    } else {
+        offsetsTo.mapValues { it.value.offset() }
+    }
+}
+
+private fun getTopicPartitions(
+    consumer: StringConsumer,
+    timeLeft: () -> Duration,
+    topic: String
+): List<TopicPartition> {
+    val topicInfo = consumer.listTopics(timeLeft())[topic]
+        ?: throw NoSuchElementException("Topic $topic is not present in the cluster")
+    return topicInfo.map { TopicPartition(it.topic(), it.partition()) }
 }
 
 private fun readByOffsets(
     consumer: StringConsumer,
     topic: String,
-    from: String?,
-    to: String?,
+    from: String,
+    to: String,
     timeout: Long,
-    maxMessages: Long
+    maxMessages: Int
 ): DataFrame {
-    TODO("☺")
-}
-
-fun main() {
-    val p = Properties().apply {
-        put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-        put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-        put("group.id", "asdasdasdasduiahdkjansd")
-        put("bootstrap.servers", "sdp-develop1.lundegaard.net:9093")
-    }
-    val consumer = newConsumer(p)
-    val frame = readByDate(
-        consumer,
-        "afs_cofisun_flags",
-        "2000-01-01T00:00:00.00Z",
-        "2030-01-01T00:00:00.00Z",
-        10000000000000L,
-        1000000000000000L
-    )
-
-    println(frame.size)
+    TODO("Offsets based reading not supported yet")
 }

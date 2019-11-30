@@ -1,3 +1,2 @@
-#exportPattern("^[[:alpha:]]+") #temporary export everything for debugging purposes
-exportPattern(".*")
+exportPattern("^kRafka.[[:alpha:]]+")
 

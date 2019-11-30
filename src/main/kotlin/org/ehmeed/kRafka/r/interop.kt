@@ -1,22 +1,24 @@
 package org.ehmeed.kRafka.r
 
-class DataFrame(
-    val keys: MutableList<String?> = mutableListOf(),
-    val timestamps: MutableList<Long?> = mutableListOf(),
-    val values: MutableList<String?> = mutableListOf()
-) {
-    val size: Int
-        get() = keys.size
+data class DataFrame(
+    val keys: List<String?> = listOf(),
+    val timestamps: List<Long?> = listOf(),
+    val values: List<String?> = listOf()
+)
 
-    fun append(key: String?, timestamp: Long?, value: String?) {
-        keys.add(key)
-        timestamps.add(timestamp)
-        values.add(value)
-    }
+val DataFrame.size: Int
+    get() = keys.size
 
-    fun append(keys: List<String?>, timestamps: List<Long?>, values: List<String?>) {
-        this.keys.addAll(keys)
-        this.timestamps.addAll(timestamps)
-        this.values.addAll(values)
-    }
-}
+fun DataFrame.append(keys: List<String?>, timestamps: List<Long?>, values: List<String?>) = DataFrame(
+    this.keys + keys,
+    this.timestamps + timestamps,
+    this.values + values
+)
+
+fun DataFrame.append(key: String?, timestamp: Long?, value: String?) = DataFrame(
+    this.keys + key,
+    this.timestamps + timestamp,
+    this.values + value
+)
+
+fun DataFrame.head(n: Int) = DataFrame(keys.take(n), timestamps.take(n), values.take(n))
